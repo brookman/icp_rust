@@ -6,7 +6,7 @@ pub use crate::types::{Matrix2, Matrix3, Rotation2, Vector2, Vector3};
 use num_traits::real::Real;
 
 use crate::so2;
-use core::f64::consts;
+use core::f32::consts;
 
 pub fn get_rt(transform: &Matrix3) -> (Matrix2, Vector2) {
     #[rustfmt::skip]
@@ -23,8 +23,8 @@ pub fn calc_rt(param: &Vector3) -> (Rotation2, Vector2) {
 
     let rot = so2::new_rotation2(theta);
 
-    let cos = f64::cos(theta);
-    let sin = f64::sin(theta);
+    let cos = f32::cos(theta);
+    let sin = f32::sin(theta);
 
     let vx = param[0];
     let vy = param[1];
@@ -63,7 +63,7 @@ pub fn log(transform: &Matrix3) -> Vector3 {
             -0.5 * theta, 0.
         )
     } else {
-        let k = f64::sin(theta) / (1. - f64::cos(theta));
+        let k = f32::sin(theta) / (1. - f32::cos(theta));
 
         #[rustfmt::skip]
         let m = Matrix2::new(

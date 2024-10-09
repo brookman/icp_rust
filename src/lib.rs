@@ -26,25 +26,25 @@ pub use crate::transform::Transform;
 pub use crate::types::{Rotation2, Vector2, Vector3};
 use nearest_neighbor::KdTree;
 
-pub type Param = nalgebra::Vector3<f64>;
-type Jacobian = nalgebra::Matrix2x3<f64>;
-type Hessian = nalgebra::Matrix3<f64>;
+pub type Param = nalgebra::Vector3<f32>;
+type Jacobian = nalgebra::Matrix2x3<f32>;
+type Hessian = nalgebra::Matrix3<f32>;
 
-const HUBER_K: f64 = 1.345;
+const HUBER_K: f32 = 1.345;
 
 pub fn residual(transform: &Transform, src: &Vector2, dst: &Vector2) -> Vector2 {
     transform.transform(src) - dst
 }
 
-pub fn error(transform: &Transform, src: &Vec<Vector2>, dst: &Vec<Vector2>) -> f64 {
-    src.iter().zip(dst.iter()).fold(0f64, |sum, (s, d)| {
+pub fn error(transform: &Transform, src: &Vec<Vector2>, dst: &Vec<Vector2>) -> f32 {
+    src.iter().zip(dst.iter()).fold(0f32, |sum, (s, d)| {
         let r = residual(transform, s, d);
         sum + r.dot(&r)
     })
 }
 
-pub fn huber_error(transform: &Transform, src: &Vec<Vector2>, dst: &Vec<Vector2>) -> f64 {
-    src.iter().zip(dst.iter()).fold(0f64, |sum, (s, d)| {
+pub fn huber_error(transform: &Transform, src: &Vec<Vector2>, dst: &Vec<Vector2>) -> f32 {
+    src.iter().zip(dst.iter()).fold(0f32, |sum, (s, d)| {
         let r = residual(transform, s, d);
         sum + huber::rho(r.dot(&r), HUBER_K)
     })
@@ -58,10 +58,10 @@ fn transform_xy(transform: &Transform, sp: &Vector3) -> Vector3 {
 }
 
 pub fn estimate_transform(src: &Vec<Vector2>, dst: &Vec<Vector2>) -> Transform {
-    let delta_norm_threshold: f64 = 1e-6;
+    let delta_norm_threshold: f32 = 1e-6;
     let max_iter: usize = 200;
 
-    let mut prev_error: f64 = f64::MAX;
+    let mut prev_error: f32 = f32::MAX;
 
     let mut transform = Transform::identity();
     for _ in 0..max_iter {
@@ -90,7 +90,7 @@ fn get_xy(xyz: &Vec<Vector3>) -> Vec<Vector2> {
 }
 
 pub struct Icp2d<'a> {
-    pub kdtree: KdTree<'a, f64, 2>,
+    pub kdtree: KdTree<'a, f32, 2>,
     pub dst: &'a [Vector2],
 }
 
@@ -131,7 +131,7 @@ impl<'a> Icp2d<'a> {
 }
 
 pub struct Icp3d<'a> {
-    pub kdtree: KdTree<'a, f64, 3>,
+    pub kdtree: KdTree<'a, f32, 3>,
     pub dst: &'a [Vector3],
 }
 
@@ -267,7 +267,7 @@ mod tests {
     fn test_residual() {
         let param: Param = Vector3::new(-10., 20., 0.01);
         let transform = Transform::new(&param);
-        let src = Vector2::new(7f64, 8f64);
+        let src = Vector2::new(7f32, 8f32);
         let dst = transform.transform(&src);
         assert_eq!(residual(&transform, &src, &dst), Vector2::zeros());
     }

@@ -3,7 +3,7 @@
 #[allow(unused_imports)]
 use num_traits::real::Real;
 
-pub fn rho(e: f64, k: f64) -> f64 {
+pub fn rho(e: f32, k: f32) -> f32 {
     debug_assert!(e >= 0.);
     debug_assert!(k >= 0.);
     let k_squared = k * k;
@@ -14,7 +14,7 @@ pub fn rho(e: f64, k: f64) -> f64 {
     }
 }
 
-pub fn drho(e: f64, k: f64) -> f64 {
+pub fn drho(e: f32, k: f32) -> f32 {
     debug_assert!(e >= 0.);
     debug_assert!(k >= 0.);
     let k_squared = k * k;
@@ -38,33 +38,33 @@ mod tests {
 
     #[test]
     fn test_drho() {
-        let e1 = (4.000_f64 + 0.001_f64).powi(2);
-        let e0 = 4.000_f64.powi(2);
-        let k = 4.0_f64;
+        let e1 = (4.000_f32 + 0.001_f32).powi(2);
+        let e0 = 4.000_f32.powi(2);
+        let k = 4.0_f32;
         let expected = (rho(e1, k) - rho(e0, k)) / (e1 - e0);
         assert!((drho(e0, k) - expected).abs() < 1e-3);
 
-        let e1 = (0.10_f64 + 0.01_f64).powi(2);
-        let e0 = 0.10_f64.powi(2);
-        let k = 4.0_f64;
+        let e1 = (0.10_f32 + 0.01_f32).powi(2);
+        let e0 = 0.10_f32.powi(2);
+        let k = 4.0_f32;
         let expected = (rho(e1, k) - rho(e0, k)) / (e1 - e0);
         assert_eq!(expected, drho(e0, k));
 
-        let e1 = (0.10_f64 + 0.0001_f64).powi(2);
-        let e0 = 0.10_f64.powi(2);
-        let k = 0.10_f64;
+        let e1 = (0.10_f32 + 0.0001_f32).powi(2);
+        let e0 = 0.10_f32.powi(2);
+        let k = 0.10_f32;
         let expected = (rho(e1, k) - rho(e0, k)) / (e1 - e0);
         assert!((drho(e0, k) - expected).abs() < 1e-3);
 
-        let e1 = (5.000_f64 + 0.001_f64).powi(2);
-        let e0 = 5.000_f64.powi(2);
-        let k = 4.0_f64;
+        let e1 = (5.000_f32 + 0.001_f32).powi(2);
+        let e0 = 5.000_f32.powi(2);
+        let k = 4.0_f32;
         let expected = (rho(e1, k) - rho(e0, k)) / (e1 - e0);
         assert!((drho(e0, k) - expected).abs() < 1e-3);
 
-        let e1 = (10.000_f64 + 0.001_f64).powi(2);
-        let e0 = 10.000_f64.powi(2);
-        let k = 4.0_f64;
+        let e1 = (10.000_f32 + 0.001_f32).powi(2);
+        let e0 = 10.000_f32.powi(2);
+        let k = 4.0_f32;
         let expected = (rho(e1, k) - rho(e0, k)) / (e1 - e0);
         assert!((drho(e0, k) - expected).abs() < 1e-3);
     }

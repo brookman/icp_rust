@@ -5,8 +5,8 @@ use nalgebra::{Dim, Matrix, Storage};
 #[allow(unused_imports)]
 use num_traits::real::Real;
 
-pub fn norm_squared<R: Dim, C: Dim, S: Storage<f64, R, C>>(matrix: &Matrix<f64, R, C, S>) -> f64 {
-    let mut res = 0f64;
+pub fn norm_squared<R: Dim, C: Dim, S: Storage<f32, R, C>>(matrix: &Matrix<f32, R, C, S>) -> f32 {
+    let mut res = 0f32;
 
     for i in 0..matrix.ncols() {
         let col = matrix.column(i);
@@ -16,6 +16,6 @@ pub fn norm_squared<R: Dim, C: Dim, S: Storage<f64, R, C>>(matrix: &Matrix<f64, 
     res
 }
 
-pub fn norm<R: Dim, C: Dim, S: Storage<f64, R, C>>(matrix: &Matrix<f64, R, C, S>) -> f64 {
-    f64::sqrt(norm_squared(matrix))
+pub fn norm<R: Dim, C: Dim, S: Storage<f32, R, C>>(matrix: &Matrix<f32, R, C, S>) -> f32 {
+    f32::sqrt(norm_squared(matrix))
 }

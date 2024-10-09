@@ -8,8 +8,8 @@ use num_traits::real::Real;
 
 use crate::types::Vector;
 
-pub fn mutable_median(input: &mut Vec<f64>) -> Option<f64> {
-    let cmp = |a: &f64, b: &f64| a.partial_cmp(b).unwrap();
+pub fn mutable_median(input: &mut Vec<f32>) -> Option<f32> {
+    let cmp = |a: &f32, b: &f32| a.partial_cmp(b).unwrap();
 
     let n = input.len();
     if n == 0 {
@@ -22,21 +22,21 @@ pub fn mutable_median(input: &mut Vec<f64>) -> Option<f64> {
 
     input.select_nth_unstable_by(n / 2 - 1, cmp);
     input.select_nth_unstable_by(n / 2 - 0, cmp);
-    let b: f64 = input[n / 2 - 1];
-    let c: f64 = input[n / 2 - 0];
+    let b: f32 = input[n / 2 - 1];
+    let c: f32 = input[n / 2 - 0];
     Some((b + c) / 2.)
 }
 
-fn mutable_mad(input: &mut Vec<f64>) -> Option<f64> {
+fn mutable_mad(input: &mut Vec<f32>) -> Option<f32> {
     let m = match mutable_median(input) {
         None => return None,
         Some(m) => m,
     };
-    let mut a = input.iter().map(|e| (e - m).abs()).collect::<Vec<f64>>();
+    let mut a = input.iter().map(|e| (e - m).abs()).collect::<Vec<f32>>();
     return mutable_median(&mut a);
 }
 
-fn mutable_standard_deviation(input: &mut Vec<f64>) -> Option<f64> {
+fn mutable_standard_deviation(input: &mut Vec<f32>) -> Option<f32> {
     // 1.0 / PPF(0.75)
     // PPF is normal distribution's percent point function
     let ppf34 = 1.482602218505602;
@@ -46,9 +46,9 @@ fn mutable_standard_deviation(input: &mut Vec<f64>) -> Option<f64> {
     }
 }
 
-pub fn calc_stddevs<const D: usize>(residuals: &Vec<Vector<D>>) -> Option<[f64; D]> {
+pub fn calc_stddevs<const D: usize>(residuals: &Vec<Vector<D>>) -> Option<[f32; D]> {
     debug_assert!(residuals.len() > 0);
-    let mut stddevs = [0f64; D];
+    let mut stddevs = [0f32; D];
     for j in 0..D {
         let mut jth_dim = residuals.iter().map(|r| r[j]).collect::<Vec<_>>();
         let Some(s) = mutable_standard_deviation(&mut jth_dim) else {
@@ -79,7 +79,7 @@ mod tests {
         let mut input = vec![-19., 38., -45., 35., 36., 68., 26., -27., 52., 41.];
         assert_eq!(mutable_median(&mut input), Some(35.5));
 
-        let mut input: Vec<f64> = vec![];
+        let mut input: Vec<f32> = vec![];
         assert_eq!(mutable_median(&mut input), None);
 
         let mut input = vec![50.];

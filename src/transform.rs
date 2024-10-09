@@ -77,7 +77,7 @@ mod tests {
 
     use crate::norm::norm;
     use crate::so2;
-    use core::f64::consts::{FRAC_PI_2, FRAC_PI_4};
+    use core::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 
     #[test]
     fn test_transform() {

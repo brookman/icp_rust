@@ -15,7 +15,7 @@ pub fn inverse3x3(matrix: &Matrix3) -> Option<Matrix3> {
     let det = m00 * (m22 * m11 - m21 * m12)
             - m10 * (m22 * m01 - m21 * m02)
             + m20 * (m12 * m01 - m11 * m02);
-    if det == 0f64 {
+    if det == 0f32 {
         return None;
     }
 
