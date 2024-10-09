@@ -33,13 +33,13 @@ fn load_scan(lines: std::io::Lines<std::io::BufReader<File>>) -> Vec<icp::Vector
     return scan_landmarks;
 }
 
-fn to_point(p: &icp::Vector2, color: &RGBColor) -> Circle<(f64, f64), u32> {
+fn to_point(p: &icp::Vector2, color: &RGBColor) -> Circle<(f32, f32), u32> {
     Circle::new((p[0], p[1]), 2, color.mix(0.7).filled())
 }
 
 fn axis_lines(
     transform: &icp::Transform,
-    length: f64,
+    length: f32,
 ) -> (icp::Vector2, icp::Vector2, icp::Vector2) {
     let rot = transform.rot;
     let t = transform.t;
@@ -51,7 +51,7 @@ fn axis_lines(
     (t, xp, yp)
 }
 
-const WINDOW_RANGE: f64 = 3000.;
+const WINDOW_RANGE: f32 = 3000.;
 const FPS: u64 = 100;
 fn main() {
     let mut window: PistonWindow = WindowSettings::new("LiDAR scan", [800, 800])

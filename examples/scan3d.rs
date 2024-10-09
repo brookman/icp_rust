@@ -8,7 +8,7 @@ use plotters_piston::{draw_piston_window, PistonBackend};
 
 const N_POINTS_IN_PACKET: usize = 24 * 16;
 
-fn to_point(p: &(f64, f64), color: &RGBColor) -> Rectangle<(f64, f64)> {
+fn to_point(p: &(f32, f32), color: &RGBColor) -> Rectangle<(f32, f32)> {
     let (x, y) = p;
     let s = 4e-3;
     Rectangle::new([(x - s, y - s), (x + s, y + s)], color.filled())
@@ -18,11 +18,11 @@ struct Scan {
     datasets: Vec<hdf5::Dataset>,
 }
 
-fn reshape(array: Array3<f64>) -> Array2<f64> {
+fn reshape(array: Array3<f32>) -> Array2<f32> {
     array.into_shape((N_POINTS_IN_PACKET, 3)).unwrap()
 }
 
-fn to_vectors(array: Array2<f64>) -> Vec<icp::Vector3> {
+fn to_vectors(array: Array2<f32>) -> Vec<icp::Vector3> {
     (0..array.shape()[0])
         .map(|i| {
             let p = array.slice(ndarray::s![i, ..]);
@@ -74,7 +74,7 @@ fn get_xy(p: &icp::Vector3) -> icp::Vector2 {
 
 fn axis_lines(
     transform: &icp::Transform,
-    length: f64,
+    length: f32,
 ) -> (icp::Vector2, icp::Vector2, icp::Vector2) {
     let rot = transform.rot;
     let t = transform.t;
