@@ -8,6 +8,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+use transform::Transformable;
 
 pub mod doc;
 pub mod se2;
@@ -89,8 +90,8 @@ fn get_xy(xyz: &Vec<Vector3>) -> Vec<Vector2> {
 }
 
 pub struct Icp2d<'a> {
-    kdtree: KdTree<'a, f64, 2>,
-    dst: &'a [Vector2],
+    pub kdtree: KdTree<'a, f64, 2>,
+    pub dst: &'a [Vector2],
 }
 
 impl<'a> Icp2d<'a> {
@@ -110,29 +111,28 @@ impl<'a> Icp2d<'a> {
     ) -> Transform {
         let mut transform = *initial_transform;
         for _ in 0..max_iter {
-            let src_tranformed = src
-                .iter()
-                .map(|sp| transform.transform(&sp))
-                .collect::<Vec<Vector2>>();
-
-            let nearest_dsts = src_tranformed
-                .iter()
-                .map(|&sp| {
-                    let (index, _distance) = self.kdtree.search(&sp);
-                    self.dst[index.unwrap()]
-                })
-                .collect();
+            let src_tranformed = src.transformed(&transform);
+            let nearest_dsts = self.get_nearest_dsts(&src_tranformed);
             let dtransform = estimate_transform(&src_tranformed, &nearest_dsts);
 
             transform = dtransform * transform;
         }
         transform
     }
+
+    pub fn get_nearest_dsts(&self, src: &[Vector2]) -> Vec<Vector2> {
+        src.iter()
+            .map(|&sp| {
+                let (index, _distance) = self.kdtree.search(&sp);
+                self.dst[index.unwrap()]
+            })
+            .collect()
+    }
 }
 
 pub struct Icp3d<'a> {
-    kdtree: KdTree<'a, f64, 3>,
-    dst: &'a [Vector3],
+    pub kdtree: KdTree<'a, f64, 3>,
+    pub dst: &'a [Vector3],
 }
 
 impl<'a> Icp3d<'a> {
@@ -153,23 +153,22 @@ impl<'a> Icp3d<'a> {
     ) -> Transform {
         let mut transform = *initial_transform;
         for _ in 0..max_iter {
-            let src_tranformed = src
-                .iter()
-                .map(|sp| transform_xy(&transform, &sp))
-                .collect::<Vec<Vector3>>();
-
-            let nearest_dsts = src_tranformed
-                .iter()
-                .map(|&sp| {
-                    let (index, _distance) = self.kdtree.search(&sp);
-                    self.dst[index.unwrap()]
-                })
-                .collect();
+            let src_tranformed = src.transformed(&transform);
+            let nearest_dsts = self.get_nearest_dsts(&src_tranformed);
             let dtransform = estimate_transform(&get_xy(&src_tranformed), &get_xy(&nearest_dsts));
 
             transform = dtransform * transform;
         }
         transform
+    }
+
+    pub fn get_nearest_dsts(&self, src: &[Vector3]) -> Vec<Vector3> {
+        src.iter()
+            .map(|&sp| {
+                let (index, _distance) = self.kdtree.search(&sp);
+                self.dst[index.unwrap()]
+            })
+            .collect()
     }
 }
 

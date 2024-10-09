@@ -1,6 +1,7 @@
-use crate::se2;
 use crate::types::{Rotation2, Vector2, Vector3};
+use crate::{se2, transform_xy};
 
+use alloc::vec::Vec;
 use core::ops::Mul;
 
 #[derive(Copy, Clone, Debug)]
@@ -47,6 +48,26 @@ impl Mul for Transform {
             rot: self.rot * rhs.rot,
             t: self.rot * rhs.t + self.t,
         }
+    }
+}
+
+pub trait Transformable<T> {
+    fn transformed(&self, transform: &Transform) -> Vec<T>;
+}
+
+impl Transformable<Vector2> for &[Vector2] {
+    fn transformed(&self, transform: &Transform) -> Vec<Vector2> {
+        self.iter()
+            .map(|sp| transform.transform(&sp))
+            .collect::<Vec<Vector2>>()
+    }
+}
+
+impl Transformable<Vector3> for &[Vector3] {
+    fn transformed(&self, transform: &Transform) -> Vec<Vector3> {
+        self.iter()
+            .map(|sp| transform_xy(&transform, &sp))
+            .collect::<Vec<Vector3>>()
     }
 }
 
