@@ -124,7 +124,7 @@ fn main() -> hdf5::Result<()> {
         root.fill(&background_color).unwrap();
 
         let mut cc = ChartBuilder::on(&root)
-            .build_cartesian_2d(-3.0..3.0, -3.0..3.0)
+            .build_cartesian_2d(-3.0f32..3.0f32, -3.0f32..3.0f32)
             .unwrap();
 
         let icp = icp::Icp3d::new(&dst);
