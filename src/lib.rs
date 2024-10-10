@@ -8,7 +8,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use transform::Transformable;
+pub use transform::Transformable;
 
 pub mod doc;
 pub mod se2;
@@ -84,7 +84,7 @@ pub fn estimate_transform(src: &Vec<Vector2>, dst: &Vec<Vector2>) -> Transform {
     transform
 }
 
-fn get_xy(xyz: &Vec<Vector3>) -> Vec<Vector2> {
+pub fn get_xy(xyz: &Vec<Vector3>) -> Vec<Vector2> {
     let f = |p: &Vector3| Vector2::new(p[0], p[1]);
     xyz.iter().map(f).collect::<Vec<Vector2>>()
 }
