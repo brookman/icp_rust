@@ -1,5 +1,5 @@
 use crate::types::{Rotation2, Vector2, Vector3};
-use crate::{se2, transform_xy};
+use crate::{se2, transform_xyz};
 
 use alloc::vec::Vec;
 use core::ops::Mul;
@@ -8,16 +8,17 @@ use core::ops::Mul;
 pub struct Transform {
     pub rot: Rotation2,
     pub t: Vector2,
+    pub t_z: f32,
 }
 
 impl Transform {
     pub fn new(param: &Vector3) -> Self {
         let (rot, t) = se2::calc_rt(param);
-        Transform { rot, t }
+        Transform { rot, t, t_z: 0.0 }
     }
 
     pub fn from_rt(rot: &Rotation2, t: &Vector2) -> Self {
-        Transform { rot: *rot, t: *t }
+        Transform { rot: *rot, t: *t, t_z: 0.0  }
     }
 
     pub fn transform(&self, landmark: &Vector2) -> Vector2 {
@@ -29,6 +30,7 @@ impl Transform {
         Transform {
             rot: inv_rot,
             t: -(inv_rot * self.t),
+            t_z: -self.t_z,
         }
     }
 
@@ -36,6 +38,7 @@ impl Transform {
         Transform {
             rot: Rotation2::identity(),
             t: Vector2::zeros(),
+            t_z: 0.0,
         }
     }
 }
@@ -47,6 +50,7 @@ impl Mul for Transform {
         Transform {
             rot: self.rot * rhs.rot,
             t: self.rot * rhs.t + self.t,
+            t_z: self.t_z + rhs.t_z,
         }
     }
 }
@@ -66,7 +70,7 @@ impl Transformable<Vector2> for &[Vector2] {
 impl Transformable<Vector3> for &[Vector3] {
     fn transformed(&self, transform: &Transform) -> Vec<Vector3> {
         self.iter()
-            .map(|sp| transform_xy(&transform, &sp))
+            .map(|sp| transform_xyz(&transform, &sp))
             .collect::<Vec<Vector3>>()
     }
 }

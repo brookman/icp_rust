@@ -50,14 +50,14 @@ pub fn huber_error(transform: &Transform, src: &Vec<Vector2>, dst: &Vec<Vector2>
     })
 }
 
-fn transform_xy(transform: &Transform, sp: &Vector3) -> Vector3 {
+fn transform_xyz(transform: &Transform, sp: &Vector3) -> Vector3 {
     let z = sp[2];
     let sxy = Vector2::new(sp[0], sp[1]);
     let dxy = transform.transform(&sxy);
-    Vector3::new(dxy[0], dxy[1], z)
+    Vector3::new(dxy[0], dxy[1], z + transform.t_z)
 }
 
-pub fn estimate_transform(src: &Vec<Vector2>, dst: &Vec<Vector2>) -> Transform {
+pub fn estimate_transform(src: &Vec<Vector2>, dst: &Vec<Vector2>) -> (Transform, f32) {
     let delta_norm_threshold: f32 = 1e-6;
     let max_iter: usize = 200;
 
@@ -73,15 +73,15 @@ pub fn estimate_transform(src: &Vec<Vector2>, dst: &Vec<Vector2>) -> Transform {
             break;
         }
 
+        transform = Transform::new(&delta) * transform;
+
         let error = huber_error(&transform, src, dst);
         if error > prev_error {
             break;
         }
         prev_error = error;
-
-        transform = Transform::new(&delta) * transform;
     }
-    transform
+    (transform, prev_error)
 }
 
 pub fn get_xy(xyz: &Vec<Vector3>) -> Vec<Vector2> {
@@ -108,16 +108,18 @@ impl<'a> Icp2d<'a> {
         src: &[Vector2],
         initial_transform: &Transform,
         max_iter: usize,
-    ) -> Transform {
+    ) -> (Transform, f32) {
         let mut transform = *initial_transform;
+        let mut prev_error = f32::MAX;
         for _ in 0..max_iter {
             let src_tranformed = src.transformed(&transform);
             let nearest_dsts = self.get_nearest_dsts(&src_tranformed);
-            let dtransform = estimate_transform(&src_tranformed, &nearest_dsts);
+            let (dtransform, error) = estimate_transform(&src_tranformed, &nearest_dsts);
 
             transform = dtransform * transform;
+            prev_error = error;
         }
-        transform
+        (transform, prev_error)
     }
 
     pub fn get_nearest_dsts(&self, src: &[Vector2]) -> Vec<Vector2> {
@@ -150,16 +152,19 @@ impl<'a> Icp3d<'a> {
         src: &[Vector3],
         initial_transform: &Transform,
         max_iter: usize,
-    ) -> Transform {
+    ) -> (Transform, f32) {
         let mut transform = *initial_transform;
+        let mut prev_error = f32::MAX;
         for _ in 0..max_iter {
             let src_tranformed = src.transformed(&transform);
             let nearest_dsts = self.get_nearest_dsts(&src_tranformed);
-            let dtransform = estimate_transform(&get_xy(&src_tranformed), &get_xy(&nearest_dsts));
+            let (dtransform, error) =
+                estimate_transform(&get_xy(&src_tranformed), &get_xy(&nearest_dsts));
 
             transform = dtransform * transform;
+            prev_error = error;
         }
-        transform
+        (transform, prev_error)
     }
 
     pub fn get_nearest_dsts(&self, src: &[Vector3]) -> Vec<Vector3> {
