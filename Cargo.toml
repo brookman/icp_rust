@@ -12,7 +12,8 @@ std = []
 [dependencies.nalgebra]
 version = "0.32.3"
 default-features = false
-features = ["macros"]
+features = ["macros", "std"]
+
 
 [dependencies.num-traits]
 version = "0.2"

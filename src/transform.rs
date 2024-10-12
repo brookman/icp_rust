@@ -1,77 +1,119 @@
-use crate::types::{Rotation2, Vector2, Vector3};
-use crate::{se2, transform_xyz};
+use crate::se2;
+use crate::types::{Rotation, Rotation2, Vector, Vector2, Vector3};
 
 use alloc::vec::Vec;
 use core::ops::Mul;
 
 #[derive(Copy, Clone, Debug)]
-pub struct Transform {
+pub struct Transform<const D: usize> {
     pub rot: Rotation2,
-    pub t: Vector2,
-    pub t_z: f32,
+    pub t: Vector<D>,
 }
 
-impl Transform {
-    pub fn new(param: &Vector3) -> Self {
+pub trait Transformer<const D: usize> {
+    fn new(param: &Vector<{ D + 1 }>) -> Self;
+    fn transform(&self, landmark: &Vector<D>) -> Vector<D>;
+    fn from_rt(rot: &Rotation<2>, t: &Vector<D>) -> Self;
+    fn inverse(&self) -> Self;
+    fn identity() -> Self;
+}
+
+impl Transformer<2> for Transform<2> {
+    fn new(param: &Vector3) -> Self {
         let (rot, t) = se2::calc_rt(param);
-        Transform { rot, t, t_z: 0.0 }
+        Self { rot, t }
     }
 
-    pub fn from_rt(rot: &Rotation2, t: &Vector2) -> Self {
-        Transform { rot: *rot, t: *t, t_z: 0.0  }
-    }
-
-    pub fn transform(&self, landmark: &Vector2) -> Vector2 {
+    fn transform(&self, landmark: &Vector2) -> Vector2 {
         self.rot * landmark + self.t
     }
 
-    pub fn inverse(&self) -> Self {
+    fn from_rt(rot: &Rotation2, t: &Vector2) -> Self {
+        Self { rot: *rot, t: *t }
+    }
+
+    fn inverse(&self) -> Self {
         let inv_rot = self.rot.inverse();
-        Transform {
+        Self {
             rot: inv_rot,
             t: -(inv_rot * self.t),
-            t_z: -self.t_z,
         }
     }
 
-    pub fn identity() -> Self {
-        Transform {
+    fn identity() -> Self {
+        Self {
             rot: Rotation2::identity(),
             t: Vector2::zeros(),
-            t_z: 0.0,
         }
     }
 }
 
-impl Mul for Transform {
+impl Mul for Transform<2> {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self {
-        Transform {
+        Self {
             rot: self.rot * rhs.rot,
             t: self.rot * rhs.t + self.t,
-            t_z: self.t_z + rhs.t_z,
         }
     }
 }
 
-pub trait Transformable<T> {
-    fn transformed(&self, transform: &Transform) -> Vec<T>;
-}
+impl Transformer<3> for Transform<3> {
+    fn new(param: &Vector<4>) -> Self {
+        let param_2d = Vector3::new(param[0], param[1], param[3]);
+        let (rot, t) = se2::calc_rt(&param_2d);
+        Self {
+            rot,
+            t: Vector3::new(t[0], t[1], param[2]),
+        }
+    }
 
-impl Transformable<Vector2> for &[Vector2] {
-    fn transformed(&self, transform: &Transform) -> Vec<Vector2> {
-        self.iter()
-            .map(|sp| transform.transform(&sp))
-            .collect::<Vec<Vector2>>()
+    fn transform(&self, landmark: &Vector3) -> Vector3 {
+        let r = self.rot * landmark.xy();
+        Vector3::new(r.x, r.y, landmark.z) + self.t
+    }
+
+    fn from_rt(rot: &Rotation2, t: &Vector3) -> Self {
+        Self { rot: *rot, t: *t }
+    }
+
+    fn inverse(&self) -> Self {
+        let inv_rot = self.rot.inverse();
+        let r = inv_rot * self.t.xy();
+        Self {
+            rot: inv_rot,
+            t: -Vector3::new(r.x, r.y, self.t.z),
+        }
+    }
+
+    fn identity() -> Self {
+        Self {
+            rot: Rotation2::identity(),
+            t: Vector3::zeros(),
+        }
     }
 }
 
-impl Transformable<Vector3> for &[Vector3] {
-    fn transformed(&self, transform: &Transform) -> Vec<Vector3> {
-        self.iter()
-            .map(|sp| transform_xyz(&transform, &sp))
-            .collect::<Vec<Vector3>>()
+impl Mul for Transform<3> {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self {
+        let r = self.rot * rhs.t.xy();
+        Self {
+            rot: self.rot * rhs.rot,
+            t: Vector3::new(r.x, r.y, rhs.t.z) + self.t,
+        }
+    }
+}
+
+pub trait Transformable<T, const D: usize> {
+    fn transformed(&self, transformer: &impl Transformer<D>) -> Vec<T>;
+}
+
+impl<const D: usize> Transformable<Vector<D>, D> for &[Vector<D>] {
+    fn transformed(&self, transformer: &impl Transformer<D>) -> Vec<Vector<D>> {
+        self.iter().map(|sp| transformer.transform(&sp)).collect()
     }
 }
 

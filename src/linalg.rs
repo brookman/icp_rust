@@ -1,3 +1,5 @@
+use nalgebra::Matrix4;
+
 use crate::types::Matrix3;
 
 pub fn inverse3x3(matrix: &Matrix3) -> Option<Matrix3> {
@@ -26,6 +28,10 @@ pub fn inverse3x3(matrix: &Matrix3) -> Option<Matrix3> {
         m21 * m10 - m20 * m11, -(m21 * m00 - m20 * m01), m11 * m00 - m10 * m01,
     );
     Some(mat / det)
+}
+
+pub fn inverse4x4(matrix: Matrix4<f32>) -> Option<Matrix4<f32>> {
+    matrix.try_inverse()
 }
 
 #[cfg(test)]

@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+
 //! The detailed jacobian derivation process is at [`doc::jacobian`].
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -9,6 +11,7 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 pub use transform::Transformable;
+use transform::Transformer;
 
 pub mod doc;
 pub mod se2;
@@ -23,41 +26,49 @@ mod types;
 
 pub use crate::norm::norm;
 pub use crate::transform::Transform;
-pub use crate::types::{Rotation2, Vector2, Vector3};
+pub use crate::types::{Rotation2, Vector, Vector2, Vector3};
 use nearest_neighbor::KdTree;
 
 pub type Param = nalgebra::Vector3<f32>;
+pub type Param3d = nalgebra::Vector4<f32>;
 type Jacobian = nalgebra::Matrix2x3<f32>;
+type Jacobian3d = nalgebra::Matrix3x4<f32>;
 type Hessian = nalgebra::Matrix3<f32>;
+type Hessian3d = nalgebra::Matrix4<f32>;
 
 const HUBER_K: f32 = 1.345;
 
-pub fn residual(transform: &Transform, src: &Vector2, dst: &Vector2) -> Vector2 {
-    transform.transform(src) - dst
+pub fn residual<const D: usize>(
+    transformer: &impl Transformer<D>,
+    src: &Vector<D>,
+    dst: &Vector<D>,
+) -> Vector<D> {
+    transformer.transform(src) - dst
 }
 
-pub fn error(transform: &Transform, src: &Vec<Vector2>, dst: &Vec<Vector2>) -> f32 {
+pub fn error<const D: usize>(
+    transformer: &impl Transformer<D>,
+    src: &Vec<Vector<D>>,
+    dst: &Vec<Vector<D>>,
+) -> f32 {
     src.iter().zip(dst.iter()).fold(0f32, |sum, (s, d)| {
-        let r = residual(transform, s, d);
+        let r = residual(transformer, s, d);
         sum + r.dot(&r)
     })
 }
 
-pub fn huber_error(transform: &Transform, src: &Vec<Vector2>, dst: &Vec<Vector2>) -> f32 {
+pub fn huber_error<const D: usize>(
+    transformer: &impl Transformer<D>,
+    src: &Vec<Vector<D>>,
+    dst: &Vec<Vector<D>>,
+) -> f32 {
     src.iter().zip(dst.iter()).fold(0f32, |sum, (s, d)| {
-        let r = residual(transform, s, d);
+        let r = residual(transformer, s, d);
         sum + huber::rho(r.dot(&r), HUBER_K)
     })
 }
 
-fn transform_xyz(transform: &Transform, sp: &Vector3) -> Vector3 {
-    let z = sp[2];
-    let sxy = Vector2::new(sp[0], sp[1]);
-    let dxy = transform.transform(&sxy);
-    Vector3::new(dxy[0], dxy[1], z + transform.t_z)
-}
-
-pub fn estimate_transform(src: &Vec<Vector2>, dst: &Vec<Vector2>) -> (Transform, f32) {
+pub fn estimate_transform_2d(src: &Vec<Vector<2>>, dst: &Vec<Vector<2>>) -> (Transform<2>, f32) {
     let delta_norm_threshold: f32 = 1e-6;
     let max_iter: usize = 200;
 
@@ -65,7 +76,7 @@ pub fn estimate_transform(src: &Vec<Vector2>, dst: &Vec<Vector2>) -> (Transform,
 
     let mut transform = Transform::identity();
     for _ in 0..max_iter {
-        let Some(delta) = weighted_gauss_newton_update(&transform, &src, &dst) else {
+        let Some(delta) = weighted_gauss_newton_update_2d(&transform, &src, &dst) else {
             break;
         };
 
@@ -73,7 +84,7 @@ pub fn estimate_transform(src: &Vec<Vector2>, dst: &Vec<Vector2>) -> (Transform,
             break;
         }
 
-        transform = Transform::new(&delta) * transform;
+        transform = Transform::<2>::new(&delta) * transform;
 
         let error = huber_error(&transform, src, dst);
         if error > prev_error {
@@ -84,9 +95,31 @@ pub fn estimate_transform(src: &Vec<Vector2>, dst: &Vec<Vector2>) -> (Transform,
     (transform, prev_error)
 }
 
-pub fn get_xy(xyz: &Vec<Vector3>) -> Vec<Vector2> {
-    let f = |p: &Vector3| Vector2::new(p[0], p[1]);
-    xyz.iter().map(f).collect::<Vec<Vector2>>()
+pub fn estimate_transform_3d(src: &Vec<Vector<3>>, dst: &Vec<Vector<3>>) -> (Transform<3>, f32) {
+    let delta_norm_threshold: f32 = 1e-6;
+    let max_iter: usize = 200;
+
+    let mut prev_error: f32 = f32::MAX;
+
+    let mut transform = Transform::<3>::identity();
+    for _ in 0..max_iter {
+        let Some(delta) = weighted_gauss_newton_update_3d(&transform, &src, &dst) else {
+            break;
+        };
+
+        if delta.dot(&delta) < delta_norm_threshold {
+            break;
+        }
+
+        transform = Transform::<3>::new(&delta) * transform;
+
+        let error = huber_error(&transform, src, dst);
+        if error > prev_error {
+            break;
+        }
+        prev_error = error;
+    }
+    (transform, prev_error)
 }
 
 pub struct Icp2d<'a> {
@@ -105,16 +138,16 @@ impl<'a> Icp2d<'a> {
     /// Estimates the transform that converts the `src` points to `dst`.
     pub fn estimate(
         &self,
-        src: &[Vector2],
-        initial_transform: &Transform,
+        src: &[Vector<2>],
+        initial_transform: &Transform<2>,
         max_iter: usize,
-    ) -> (Transform, f32) {
+    ) -> (Transform<2>, f32) {
         let mut transform = *initial_transform;
         let mut prev_error = f32::MAX;
         for _ in 0..max_iter {
             let src_tranformed = src.transformed(&transform);
             let nearest_dsts = self.get_nearest_dsts(&src_tranformed);
-            let (dtransform, error) = estimate_transform(&src_tranformed, &nearest_dsts);
+            let (dtransform, error) = estimate_transform_2d(&src_tranformed, &nearest_dsts);
 
             transform = dtransform * transform;
             prev_error = error;
@@ -149,17 +182,16 @@ impl<'a> Icp3d<'a> {
     /// This function assumes that the vehicle, LiDAR or other point cloud scanner is moving on the xy-plane.
     pub fn estimate(
         &self,
-        src: &[Vector3],
-        initial_transform: &Transform,
+        src: &[Vector<3>],
+        initial_transform: &Transform<3>,
         max_iter: usize,
-    ) -> (Transform, f32) {
+    ) -> (Transform<3>, f32) {
         let mut transform = *initial_transform;
         let mut prev_error = f32::MAX;
         for _ in 0..max_iter {
             let src_tranformed = src.transformed(&transform);
             let nearest_dsts = self.get_nearest_dsts(&src_tranformed);
-            let (dtransform, error) =
-                estimate_transform(&get_xy(&src_tranformed), &get_xy(&nearest_dsts));
+            let (dtransform, error) = estimate_transform_3d(&src_tranformed, &nearest_dsts);
 
             transform = dtransform * transform;
             prev_error = error;
@@ -187,13 +219,28 @@ fn jacobian(rot: &Rotation2, landmark: &Vector2) -> Jacobian {
         r[(1, 0)], r[(1, 1)], b[1])
 }
 
-fn check_input_size(input: &Vec<Vector2>) -> bool {
+// Calculate the Jacobian for 3D points with rotation only around the z-axis
+fn jacobian_3d(rot: &Rotation2, landmark: &Vector3) -> Jacobian3d {
+    // Rotation around the z-axis affects only the x and y components of the 3D point.
+    let a = Vector2::new(-landmark[1], landmark[0]);
+    let r = rot.matrix();
+    let b = rot * a;
+
+    #[rustfmt::skip]
+    Jacobian3d::new(
+        r[(0, 0)], r[(0, 1)], 0.0, b[0], // x-translation, rotation affects x and y
+        r[(1, 0)], r[(1, 1)], 0.0, b[1], // y-translation, rotation affects x and y
+        0.0,             0.0, 1.0,  0.0  // z-translation, no effect from rotation
+    )
+}
+
+fn check_input_size<const D: usize>(input: &Vec<Vector<D>>) -> bool {
     // Check if the input does not have sufficient samples to estimate the update
     input.len() > 0 && input.len() >= input[0].len()
 }
 
 pub fn gauss_newton_update(
-    transform: &Transform,
+    transform: &Transform<2>,
     src: &Vec<Vector2>,
     dst: &Vec<Vector2>,
 ) -> Option<Param> {
@@ -219,8 +266,8 @@ pub fn gauss_newton_update(
     }
 }
 
-pub fn weighted_gauss_newton_update(
-    transform: &Transform,
+pub fn weighted_gauss_newton_update_2d(
+    transform: &Transform<2>,
     src: &Vec<Vector2>,
     dst: &Vec<Vector2>,
 ) -> Option<Param> {
@@ -241,25 +288,70 @@ pub fn weighted_gauss_newton_update(
         return None;
     };
 
-    let mut jtr = Param::zeros();
-    let mut jtj = Hessian::zeros();
-    for (s, r) in src.iter().zip(residuals.iter()) {
-        let jacobian_i = jacobian(&transform.rot, s);
-        for (j, jacobian_ij) in jacobian_i.row_iter().enumerate() {
-            if stddevs[j] == 0. {
+    let mut param = Param::zeros();
+    let mut hessian = Hessian::zeros();
+    for (source, residual) in src.iter().zip(residuals.iter()) {
+        let jacobian = jacobian(&transform.rot, source);
+        for (row_index, jacobian_row) in jacobian.row_iter().enumerate() {
+            if stddevs[row_index] == 0. {
                 continue;
             }
-            let g = 1. / stddevs[j];
-            let r_ij = r[j];
-            let w_ij = huber::drho(r_ij * r_ij, HUBER_K);
+            let g = 1. / stddevs[row_index];
+            let row_residual = residual[row_index];
+            let d_roh = huber::drho(row_residual * row_residual, HUBER_K);
 
-            jtr += w_ij * g * jacobian_ij.transpose() * r_ij;
-            jtj += w_ij * g * jacobian_ij.transpose() * jacobian_ij;
+            param += d_roh * g * jacobian_row.transpose() * row_residual;
+            hessian += d_roh * g * jacobian_row.transpose() * jacobian_row;
         }
     }
 
-    match linalg::inverse3x3(&jtj) {
-        Some(jtj_inv) => return Some(-jtj_inv * jtr),
+    match linalg::inverse3x3(&hessian) {
+        Some(inverse_hessian) => return Some(-inverse_hessian * param),
+        None => return None,
+    }
+}
+
+pub fn weighted_gauss_newton_update_3d(
+    transform: &Transform<3>,
+    src: &Vec<Vector3>,
+    dst: &Vec<Vector3>,
+) -> Option<Param3d> {
+    debug_assert_eq!(src.len(), dst.len());
+
+    if !check_input_size(&src) {
+        // The input does not have sufficient samples to estimate the update
+        return None;
+    }
+
+    let residuals = src
+        .iter()
+        .zip(dst.iter())
+        .map(|(s, d)| residual(transform, s, d))
+        .collect::<Vec<_>>();
+
+    let Some(stddevs) = stats::calc_stddevs(&residuals) else {
+        return None;
+    };
+
+    let mut param = Param3d::zeros();
+    let mut hessian = Hessian3d::zeros();
+    for (source, residual) in src.iter().zip(residuals.iter()) {
+        let jacobian = jacobian_3d(&transform.rot, source);
+        for (row_index, jacobian_row) in jacobian.row_iter().enumerate() {
+            if stddevs[row_index] == 0. {
+                continue;
+            }
+            let g = 1. / stddevs[row_index];
+            let row_residual = residual[row_index];
+            let d_roh = huber::drho(row_residual * row_residual, HUBER_K);
+
+            param += d_roh * g * jacobian_row.transpose() * row_residual;
+            hessian += d_roh * g * jacobian_row.transpose() * jacobian_row;
+        }
+    }
+
+    match linalg::inverse4x4(hessian) {
+        Some(inverse_hessian) => return Some(-inverse_hessian * param),
         None => return None,
     }
 }
@@ -362,12 +454,12 @@ mod tests {
         // insufficient input size
         let src = vec![];
         let dst = vec![];
-        assert!(weighted_gauss_newton_update(&transform, &src, &dst).is_none());
+        assert!(weighted_gauss_newton_update_2d(&transform, &src, &dst).is_none());
 
         // insufficient input size
         let src = vec![Vector2::new(-8.89304516, 0.54202289)];
         let dst = vec![transform.transform(&src[0])];
-        assert!(weighted_gauss_newton_update(&transform, &src, &dst).is_none());
+        assert!(weighted_gauss_newton_update_2d(&transform, &src, &dst).is_none());
 
         // insufficient input size
         let src = vec![
@@ -375,7 +467,7 @@ mod tests {
             Vector2::new(-4.03198385, -2.81807802),
         ];
         let dst = vec![transform.transform(&src[0]), transform.transform(&src[1])];
-        assert!(weighted_gauss_newton_update(&transform, &src, &dst).is_none());
+        assert!(weighted_gauss_newton_update_2d(&transform, &src, &dst).is_none());
 
         // sufficient input size but rank is insufficient
         let src = vec![
@@ -388,7 +480,7 @@ mod tests {
             transform.transform(&src[1]),
             transform.transform(&src[2]),
         ];
-        assert!(weighted_gauss_newton_update(&transform, &src, &dst).is_none());
+        assert!(weighted_gauss_newton_update_2d(&transform, &src, &dst).is_none());
 
         // sufficient input size but rank is insufficient
         let src = vec![
@@ -401,7 +493,7 @@ mod tests {
             transform.transform(&src[1]),
             transform.transform(&src[2]),
         ];
-        assert!(weighted_gauss_newton_update(&transform, &src, &dst).is_none());
+        assert!(weighted_gauss_newton_update_2d(&transform, &src, &dst).is_none());
     }
 
     #[test]
@@ -427,7 +519,7 @@ mod tests {
         let initial_transform = Transform::new(&initial_param);
         // TODO Actually there is some error, but Hessian is not invertible so
         // the update cannot be calculated
-        assert!(weighted_gauss_newton_update(&initial_transform, &src, &dst).is_none());
+        assert!(weighted_gauss_newton_update_2d(&initial_transform, &src, &dst).is_none());
     }
 
     #[test]
@@ -493,7 +585,7 @@ mod tests {
             .zip(noise.iter())
             .map(|(p, n)| true_transform.transform(&p) + n)
             .collect::<Vec<_>>();
-        let Some(update) = weighted_gauss_newton_update(&initial_transform, &src, &dst) else {
+        let Some(update) = weighted_gauss_newton_update_2d(&initial_transform, &src, &dst) else {
             panic!("Return value cannot be None");
         };
         let updated_param = initial_param + update;
@@ -503,7 +595,7 @@ mod tests {
         let e1 = error(&updated_transform, &src, &dst);
         assert!(e1 < e0 * 0.1);
 
-        let updated_transform = estimate_transform(&src, &dst);
+        let updated_transform = estimate_transform_2d(&src, &dst);
 
         let e0 = error(&initial_transform, &src, &dst);
         let e1 = error(&updated_transform, &src, &dst);
