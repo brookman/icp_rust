@@ -68,11 +68,11 @@ pub fn huber_error<const D: usize>(
     })
 }
 
-pub fn estimate_transform_2d(src: &Vec<Vector<2>>, dst: &Vec<Vector<2>>) -> (Transform<2>, f32) {
+pub fn estimate_transform_2d(src: &Vec<Vector<2>>, dst: &Vec<Vector<2>>) -> (Transform<2>, Option<f32>) {
     let delta_norm_threshold: f32 = 1e-6;
     let max_iter: usize = 200;
 
-    let mut prev_error: f32 = f32::MAX;
+    let mut prev_error: Option<f32> = None;
 
     let mut transform = Transform::identity();
     for _ in 0..max_iter {
@@ -87,19 +87,19 @@ pub fn estimate_transform_2d(src: &Vec<Vector<2>>, dst: &Vec<Vector<2>>) -> (Tra
         transform = Transform::<2>::new(&delta) * transform;
 
         let error = huber_error(&transform, src, dst);
-        if error > prev_error {
+        if error > prev_error.unwrap_or(f32::MAX) {
             break;
         }
-        prev_error = error;
+        prev_error = Some(error);
     }
     (transform, prev_error)
 }
 
-pub fn estimate_transform_3d(src: &Vec<Vector<3>>, dst: &Vec<Vector<3>>) -> (Transform<3>, f32) {
+pub fn estimate_transform_3d(src: &Vec<Vector<3>>, dst: &Vec<Vector<3>>) -> (Transform<3>, Option<f32>) {
     let delta_norm_threshold: f32 = 1e-6;
     let max_iter: usize = 200;
 
-    let mut prev_error: f32 = f32::MAX;
+    let mut prev_error: Option<f32> = None;
 
     let mut transform = Transform::<3>::identity();
     for _ in 0..max_iter {
@@ -114,10 +114,10 @@ pub fn estimate_transform_3d(src: &Vec<Vector<3>>, dst: &Vec<Vector<3>>) -> (Tra
         transform = Transform::<3>::new(&delta) * transform;
 
         let error = huber_error(&transform, src, dst);
-        if error > prev_error {
+        if error > prev_error.unwrap_or(f32::MAX) {
             break;
         }
-        prev_error = error;
+        prev_error = Some(error);
     }
     (transform, prev_error)
 }
@@ -141,9 +141,9 @@ impl<'a> Icp2d<'a> {
         src: &[Vector<2>],
         initial_transform: &Transform<2>,
         max_iter: usize,
-    ) -> (Transform<2>, f32) {
+    ) -> (Transform<2>, Option<f32>) {
         let mut transform = *initial_transform;
-        let mut prev_error = f32::MAX;
+        let mut prev_error = None;
         for _ in 0..max_iter {
             let src_tranformed = src.transformed(&transform);
             let nearest_dsts = self.get_nearest_dsts(&src_tranformed);
@@ -185,9 +185,9 @@ impl<'a> Icp3d<'a> {
         src: &[Vector<3>],
         initial_transform: &Transform<3>,
         max_iter: usize,
-    ) -> (Transform<3>, f32) {
+    ) -> (Transform<3>, Option<f32>) {
         let mut transform = *initial_transform;
-        let mut prev_error = f32::MAX;
+        let mut prev_error = None;
         for _ in 0..max_iter {
             let src_tranformed = src.transformed(&transform);
             let nearest_dsts = self.get_nearest_dsts(&src_tranformed);
