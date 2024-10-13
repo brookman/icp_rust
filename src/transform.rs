@@ -113,7 +113,7 @@ pub trait Transformable<T, const D: usize> {
 
 impl<const D: usize> Transformable<Vector<D>, D> for &[Vector<D>] {
     fn transformed(&self, transformer: &impl Transformer<D>) -> Vec<Vector<D>> {
-        self.iter().map(|sp| transformer.transform(&sp)).collect()
+        self.iter().map(|sp| transformer.transform(sp)).collect()
     }
 }
 

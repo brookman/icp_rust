@@ -48,8 +48,8 @@ pub fn residual<const D: usize>(
 
 pub fn error<const D: usize>(
     transformer: &impl Transformer<D>,
-    src: &Vec<Vector<D>>,
-    dst: &Vec<Vector<D>>,
+    src: &[Vector<D>],
+    dst: &[Vector<D>],
 ) -> f32 {
     src.iter().zip(dst.iter()).fold(0f32, |sum, (s, d)| {
         let r = residual(transformer, s, d);
@@ -59,8 +59,8 @@ pub fn error<const D: usize>(
 
 pub fn huber_error<const D: usize>(
     transformer: &impl Transformer<D>,
-    src: &Vec<Vector<D>>,
-    dst: &Vec<Vector<D>>,
+    src: &[Vector<D>],
+    dst: &[Vector<D>],
 ) -> f32 {
     src.iter().zip(dst.iter()).fold(0f32, |sum, (s, d)| {
         let r = residual(transformer, s, d);
@@ -68,7 +68,7 @@ pub fn huber_error<const D: usize>(
     })
 }
 
-pub fn estimate_transform_2d(src: &Vec<Vector<2>>, dst: &Vec<Vector<2>>) -> (Transform<2>, Option<f32>) {
+pub fn estimate_transform_2d(src: &[Vector<2>], dst: &[Vector<2>]) -> (Transform<2>, Option<f32>) {
     let delta_norm_threshold: f32 = 1e-6;
     let max_iter: usize = 200;
 
@@ -76,7 +76,7 @@ pub fn estimate_transform_2d(src: &Vec<Vector<2>>, dst: &Vec<Vector<2>>) -> (Tra
 
     let mut transform = Transform::identity();
     for _ in 0..max_iter {
-        let Some(delta) = weighted_gauss_newton_update_2d(&transform, &src, &dst) else {
+        let Some(delta) = weighted_gauss_newton_update_2d(&transform, src, dst) else {
             break;
         };
 
@@ -95,7 +95,7 @@ pub fn estimate_transform_2d(src: &Vec<Vector<2>>, dst: &Vec<Vector<2>>) -> (Tra
     (transform, prev_error)
 }
 
-pub fn estimate_transform_3d(src: &Vec<Vector<3>>, dst: &Vec<Vector<3>>) -> (Transform<3>, Option<f32>) {
+pub fn estimate_transform_3d(src: &[Vector<3>], dst: &[Vector<3>]) -> (Transform<3>, Option<f32>) {
     let delta_norm_threshold: f32 = 1e-6;
     let max_iter: usize = 200;
 
@@ -103,7 +103,7 @@ pub fn estimate_transform_3d(src: &Vec<Vector<3>>, dst: &Vec<Vector<3>>) -> (Tra
 
     let mut transform = Transform::<3>::identity();
     for _ in 0..max_iter {
-        let Some(delta) = weighted_gauss_newton_update_3d(&transform, &src, &dst) else {
+        let Some(delta) = weighted_gauss_newton_update_3d(&transform, src, dst) else {
             break;
         };
 
@@ -234,17 +234,17 @@ fn jacobian_3d(rot: &Rotation2, landmark: &Vector3) -> Jacobian3d {
     )
 }
 
-fn check_input_size<const D: usize>(input: &Vec<Vector<D>>) -> bool {
+fn check_input_size<const D: usize>(input: &[Vector<D>]) -> bool {
     // Check if the input does not have sufficient samples to estimate the update
-    input.len() > 0 && input.len() >= input[0].len()
+    !input.is_empty() && input.len() >= input[0].len()
 }
 
 pub fn gauss_newton_update(
     transform: &Transform<2>,
-    src: &Vec<Vector2>,
-    dst: &Vec<Vector2>,
+    src: &[Vector<2>],
+    dst: &[Vector<2>],
 ) -> Option<Param> {
-    if !check_input_size(&src) {
+    if !check_input_size(src) {
         // The input does not have sufficient samples to estimate the update
         return None;
     }
@@ -260,20 +260,17 @@ pub fn gauss_newton_update(
         },
     );
     // TODO Check matrix rank before solving linear equation
-    match linalg::inverse3x3(&jtj) {
-        Some(jtj_inv) => return Some(-jtj_inv * jtr),
-        None => return None,
-    }
+    linalg::inverse3x3(&jtj).map(|jtj_inv| -jtj_inv * jtr)
 }
 
 pub fn weighted_gauss_newton_update_2d(
     transform: &Transform<2>,
-    src: &Vec<Vector2>,
-    dst: &Vec<Vector2>,
+    src: &[Vector<2>],
+    dst: &[Vector<2>],
 ) -> Option<Param> {
     debug_assert_eq!(src.len(), dst.len());
 
-    if !check_input_size(&src) {
+    if !check_input_size(src) {
         // The input does not have sufficient samples to estimate the update
         return None;
     }
@@ -284,9 +281,7 @@ pub fn weighted_gauss_newton_update_2d(
         .map(|(s, d)| residual(transform, s, d))
         .collect::<Vec<_>>();
 
-    let Some(stddevs) = stats::calc_stddevs(&residuals) else {
-        return None;
-    };
+    let stddevs = stats::calc_stddevs(&residuals)?;
 
     let mut param = Param::zeros();
     let mut hessian = Hessian::zeros();
@@ -305,20 +300,17 @@ pub fn weighted_gauss_newton_update_2d(
         }
     }
 
-    match linalg::inverse3x3(&hessian) {
-        Some(inverse_hessian) => return Some(-inverse_hessian * param),
-        None => return None,
-    }
+    linalg::inverse3x3(&hessian).map(|inverse_hessian| -inverse_hessian * param)
 }
 
 pub fn weighted_gauss_newton_update_3d(
     transform: &Transform<3>,
-    src: &Vec<Vector3>,
-    dst: &Vec<Vector3>,
+    src: &[Vector<3>],
+    dst: &[Vector<3>],
 ) -> Option<Param3d> {
     debug_assert_eq!(src.len(), dst.len());
 
-    if !check_input_size(&src) {
+    if !check_input_size(src) {
         // The input does not have sufficient samples to estimate the update
         return None;
     }
@@ -329,9 +321,7 @@ pub fn weighted_gauss_newton_update_3d(
         .map(|(s, d)| residual(transform, s, d))
         .collect::<Vec<_>>();
 
-    let Some(stddevs) = stats::calc_stddevs(&residuals) else {
-        return None;
-    };
+    let stddevs = stats::calc_stddevs(&residuals)?;
 
     let mut param = Param3d::zeros();
     let mut hessian = Hessian3d::zeros();
@@ -350,10 +340,7 @@ pub fn weighted_gauss_newton_update_3d(
         }
     }
 
-    match linalg::inverse4x4(hessian) {
-        Some(inverse_hessian) => return Some(-inverse_hessian * param),
-        None => return None,
-    }
+    linalg::inverse4x4(hessian).map(|inverse_hessian| -inverse_hessian * param)
 }
 
 #[cfg(test)]
