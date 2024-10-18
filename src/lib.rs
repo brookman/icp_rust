@@ -27,7 +27,8 @@ mod types;
 pub use crate::norm::norm;
 pub use crate::transform::Transform;
 pub use crate::types::{Rotation2, Vector, Vector2, Vector3};
-use nearest_neighbor::KdTree;
+use kdtree::distance::squared_euclidean;
+use kdtree::KdTree;
 
 pub type Param = nalgebra::Vector3<f32>;
 pub type Param3d = nalgebra::Vector4<f32>;
@@ -124,17 +125,18 @@ pub fn estimate_transform_3d(src: &[Vector<3>], dst: &[Vector<3>]) -> (Transform
     (transform, prev_error)
 }
 
-pub struct Icp2d<'a> {
-    pub kdtree: KdTree<'a, f32, 2>,
-    pub dst: &'a [Vector2],
+pub struct Icp2d {
+    pub kdtree: KdTree<f32, usize, [f32; 2]>,
+    pub dst: Vec<Vector2>,
 }
 
-impl<'a> Icp2d<'a> {
-    pub fn new(dst: &'a [Vector2]) -> Self {
-        Icp2d {
-            kdtree: KdTree::new(dst, 1),
-            dst,
+impl Icp2d {
+    pub fn new(dst: Vec<Vector2>) -> Self {
+        let mut kdtree = KdTree::new(2);
+        for (i, p) in dst.iter().enumerate() {
+            kdtree.add([p.x, p.y], i).unwrap();
         }
+        Icp2d { kdtree, dst }
     }
 
     /// Estimates the transform that converts the `src` points to `dst`.
@@ -159,25 +161,30 @@ impl<'a> Icp2d<'a> {
 
     pub fn get_nearest_dsts(&self, src: &[Vector2]) -> Vec<Vector2> {
         src.iter()
-            .map(|&sp| {
-                let (index, _distance) = self.kdtree.search(&sp);
-                self.dst[index.unwrap()]
+            .map(|&p| {
+                let results = self
+                    .kdtree
+                    .nearest(&[p.x, p.y], 1, &squared_euclidean)
+                    .unwrap();
+                let first = results.first().unwrap();
+                self.dst[*first.1]
             })
             .collect()
     }
 }
 
-pub struct Icp3d<'a> {
-    pub kdtree: KdTree<'a, f32, 3>,
-    pub dst: &'a [Vector3],
+pub struct Icp3d {
+    pub kdtree: KdTree<f32, usize, [f32; 3]>,
+    pub dst: Vec<Vector3>,
 }
 
-impl<'a> Icp3d<'a> {
-    pub fn new(dst: &'a [Vector3]) -> Self {
-        Icp3d {
-            kdtree: KdTree::new(dst, 1),
-            dst,
+impl Icp3d {
+    pub fn new(dst: Vec<Vector3>) -> Self {
+        let mut kdtree = KdTree::new(3);
+        for (i, p) in dst.iter().enumerate() {
+            kdtree.add([p.x, p.y, p.z], i).unwrap();
         }
+        Icp3d { kdtree, dst }
     }
 
     /// Estimates the transform on the xy-plane that converts the `src` points to `dst`.
@@ -203,9 +210,13 @@ impl<'a> Icp3d<'a> {
 
     pub fn get_nearest_dsts(&self, src: &[Vector3]) -> Vec<Vector3> {
         src.iter()
-            .map(|&sp| {
-                let (index, _distance) = self.kdtree.search(&sp);
-                self.dst[index.unwrap()]
+            .map(|&p| {
+                let results = self
+                    .kdtree
+                    .nearest(&[p.x, p.y, p.z], 1, &squared_euclidean)
+                    .unwrap();
+                let first = results.first().unwrap();
+                self.dst[*first.1]
             })
             .collect()
     }
