@@ -26,7 +26,7 @@ mod types;
 
 pub use crate::norm::norm;
 pub use crate::transform::Transform;
-pub use crate::types::{Rotation2, Vector, Vector2, Vector3};
+pub use crate::types::{DebugInfo2d, DebugInfo3d, Rotation2, Vector, Vector2, Vector3};
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 
@@ -81,18 +81,19 @@ pub fn estimate_transform_2d(src: &[Vector<2>], dst: &[Vector<2>]) -> (Transform
             break;
         };
 
-        if delta.dot(&delta) < delta_norm_threshold {
-            break;
-        }
-
         let t = Transform::<2>::new(&delta) * transform;
-
         let error = huber_error(&t, src, dst);
+
         if error > prev_error {
             break;
         }
+
         transform = t;
         prev_error = error;
+
+        if delta.dot(&delta) < delta_norm_threshold {
+            break;
+        }
     }
     (transform, prev_error)
 }
@@ -101,7 +102,7 @@ pub fn estimate_transform_3d(src: &[Vector<3>], dst: &[Vector<3>]) -> (Transform
     let delta_norm_threshold: f32 = 1e-6;
     let max_iter: usize = 200;
 
-    let mut transform = Transform::<3>::identity();
+    let mut transform = Transform::identity();
     let mut prev_error = huber_error(&transform, src, dst);
 
     for _ in 0..max_iter {
@@ -109,18 +110,19 @@ pub fn estimate_transform_3d(src: &[Vector<3>], dst: &[Vector<3>]) -> (Transform
             break;
         };
 
-        if delta.dot(&delta) < delta_norm_threshold {
-            break;
-        }
-
         let t = Transform::<3>::new(&delta) * transform;
-
         let error = huber_error(&t, src, dst);
+
         if error > prev_error {
             break;
         }
+
         transform = t;
         prev_error = error;
+
+        if delta.dot(&delta) < delta_norm_threshold {
+            break;
+        }
     }
     (transform, prev_error)
 }
@@ -145,18 +147,28 @@ impl Icp2d {
         src: &[Vector<2>],
         initial_transform: &Transform<2>,
         max_iter: usize,
-    ) -> (Transform<2>, f32) {
+        debug: bool,
+    ) -> (Transform<2>, f32, DebugInfo2d) {
+        let mut debug_info = vec![];
         let mut transform = *initial_transform;
         let mut prev_error = f32::MAX;
         for _ in 0..max_iter {
             let src_tranformed = src.transformed(&transform);
             let nearest_dsts = self.get_nearest_dsts(&src_tranformed);
+            if debug {
+                let pairs = src_tranformed
+                    .iter()
+                    .zip(nearest_dsts.iter())
+                    .map(|(s, d)| (*s, *d))
+                    .collect::<Vec<_>>();
+                debug_info.push(pairs);
+            }
             let (dtransform, error) = estimate_transform_2d(&src_tranformed, &nearest_dsts);
 
             transform = dtransform * transform;
             prev_error = error;
         }
-        (transform, prev_error)
+        (transform, prev_error, debug_info)
     }
 
     pub fn get_nearest_dsts(&self, src: &[Vector2]) -> Vec<Vector2> {
@@ -194,18 +206,28 @@ impl Icp3d {
         src: &[Vector<3>],
         initial_transform: &Transform<3>,
         max_iter: usize,
-    ) -> (Transform<3>, f32) {
+        debug: bool,
+    ) -> (Transform<3>, f32, DebugInfo3d) {
+        let mut debug_info = vec![];
         let mut transform = *initial_transform;
         let mut prev_error = f32::MAX;
         for _ in 0..max_iter {
             let src_tranformed = src.transformed(&transform);
             let nearest_dsts = self.get_nearest_dsts(&src_tranformed);
+            if debug {
+                let pairs = src_tranformed
+                    .iter()
+                    .zip(nearest_dsts.iter())
+                    .map(|(s, d)| (*s, *d))
+                    .collect::<Vec<_>>();
+                debug_info.push(pairs);
+            }
             let (dtransform, error) = estimate_transform_3d(&src_tranformed, &nearest_dsts);
 
             transform = dtransform * transform;
             prev_error = error;
         }
-        (transform, prev_error)
+        (transform, prev_error, debug_info)
     }
 
     pub fn get_nearest_dsts(&self, src: &[Vector3]) -> Vec<Vector3> {
@@ -638,7 +660,7 @@ mod tests {
         let noise = Transform::new(&Param::new(0.05, 0.010, 0.010));
         let initial_transform = noise * true_transform;
         let icp = Icp3d::new(&dst);
-        let pred_transform = icp.estimate(&src, &initial_transform, 20);
+        let pred_transform = icp.estimate(&src, &initial_transform, 20, false);
 
         for (sp, dp_true) in src.iter().zip(dst.iter()) {
             let dp_pred = transform_xy(&pred_transform, &sp);
@@ -682,7 +704,7 @@ mod tests {
         let noise = Transform::new(&Param::new(0.05, 0.010, 0.010));
         let initial_transform = noise * true_transform;
         let icp = Icp2d::new(&dst);
-        let pred_transform = icp.estimate(&src, &initial_transform, 20);
+        let pred_transform = icp.estimate(&src, &initial_transform, 20, false);
 
         for (sp, dp_true) in src.iter().zip(dst.iter()) {
             let dp_pred = pred_transform.transform(&sp);
