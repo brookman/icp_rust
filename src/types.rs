@@ -10,6 +10,7 @@ pub type Matrix2 = MatrixNxN<2>;
 pub type Matrix3 = MatrixNxN<3>;
 pub type Vector2 = Vector<2>;
 pub type Vector3 = Vector<3>;
+pub type Vector6 = Vector<6>;
 pub type Rotation2 = Rotation<2>;
 pub type DebugInfo2d = Vec<Vec<(Vector2, Vector2)>>;
 pub type DebugInfo3d = Vec<Vec<(Vector3, Vector3)>>;

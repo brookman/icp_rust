@@ -1,5 +1,5 @@
 use crate::se2;
-use crate::types::{Rotation, Rotation2, Vector, Vector2, Vector3};
+use crate::types::{Rotation, Rotation2, Vector, Vector2, Vector3, Vector6};
 
 use alloc::vec::Vec;
 use core::ops::Mul;
@@ -11,28 +11,20 @@ pub struct Transform<const D: usize> {
 }
 
 pub trait Transformer<const D: usize> {
-    fn new(param: &Vector<{ D + 1 }>) -> Self;
     fn transform(&self, landmark: &Vector<D>) -> Vector<D>;
-    fn from_rt(rot: &Rotation<2>, t: &Vector<D>) -> Self;
-    fn inverse(&self) -> Self;
-    fn identity() -> Self;
 }
 
-impl Transformer<2> for Transform<2> {
-    fn new(param: &Vector3) -> Self {
+impl Transform<2> {
+    pub fn new(param: &Vector3) -> Self {
         let (rot, t) = se2::calc_rt(param);
         Self { rot, t }
     }
 
-    fn transform(&self, landmark: &Vector2) -> Vector2 {
-        self.rot * landmark + self.t
-    }
-
-    fn from_rt(rot: &Rotation2, t: &Vector2) -> Self {
+    pub fn from_rt(rot: &Rotation2, t: &Vector2) -> Self {
         Self { rot: *rot, t: *t }
     }
 
-    fn inverse(&self) -> Self {
+    pub fn inverse(&self) -> Self {
         let inv_rot = self.rot.inverse();
         Self {
             rot: inv_rot,
@@ -40,11 +32,17 @@ impl Transformer<2> for Transform<2> {
         }
     }
 
-    fn identity() -> Self {
+    pub fn identity() -> Self {
         Self {
             rot: Rotation2::identity(),
             t: Vector2::zeros(),
         }
+    }
+}
+
+impl Transformer<2> for Transform<2> {
+    fn transform(&self, landmark: &Vector2) -> Vector2 {
+        self.rot * landmark + self.t
     }
 }
 
@@ -59,8 +57,8 @@ impl Mul for Transform<2> {
     }
 }
 
-impl Transformer<3> for Transform<3> {
-    fn new(param: &Vector<4>) -> Self {
+impl Transform<3> {
+    pub fn new(param: &Vector<4>) -> Self {
         let param_2d = Vector3::new(param[0], param[1], param[3]);
         let (rot, t) = se2::calc_rt(&param_2d);
         Self {
@@ -69,16 +67,11 @@ impl Transformer<3> for Transform<3> {
         }
     }
 
-    fn transform(&self, landmark: &Vector3) -> Vector3 {
-        let r = self.rot * landmark.xy();
-        Vector3::new(r.x, r.y, landmark.z) + self.t
-    }
-
-    fn from_rt(rot: &Rotation2, t: &Vector3) -> Self {
+    pub fn from_rt(rot: &Rotation2, t: &Vector3) -> Self {
         Self { rot: *rot, t: *t }
     }
 
-    fn inverse(&self) -> Self {
+    pub fn inverse(&self) -> Self {
         let inv_rot = self.rot.inverse();
         let r = inv_rot * self.t.xy();
         Self {
@@ -87,11 +80,27 @@ impl Transformer<3> for Transform<3> {
         }
     }
 
-    fn identity() -> Self {
+    pub fn identity() -> Self {
         Self {
             rot: Rotation2::identity(),
             t: Vector3::zeros(),
         }
+    }
+}
+
+impl Transformer<3> for Transform<3> {
+    fn transform(&self, landmark: &Vector3) -> Vector3 {
+        let r = self.rot * landmark.xy();
+        Vector3::new(r.x, r.y, landmark.z) + self.t
+    }
+}
+
+impl Transformer<6> for Transform<3> {
+    fn transform(&self, landmark: &Vector6) -> Vector6 {
+        let r = self.rot * landmark.xy();
+        let result = Vector3::new(r.x, r.y, landmark.z) + self.t;
+        // TODO: transform the normal vector
+        Vector6::new(result.x, result.y, result.z, landmark[3], landmark[4], landmark[5])
     }
 }
 

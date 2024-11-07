@@ -1,5 +1,3 @@
-#![feature(generic_const_exprs)]
-
 //! The detailed jacobian derivation process is at [`doc::jacobian`].
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -26,7 +24,7 @@ mod types;
 
 pub use crate::norm::norm;
 pub use crate::transform::Transform;
-pub use crate::types::{DebugInfo2d, DebugInfo3d, Rotation2, Vector, Vector2, Vector3};
+pub use crate::types::{DebugInfo2d, DebugInfo3d, Rotation2, Vector, Vector2, Vector3, Vector6};
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 
@@ -73,7 +71,7 @@ pub fn estimate_transform_2d(src: &[Vector<2>], dst: &[Vector<2>]) -> (Transform
     let delta_norm_threshold: f32 = 1e-6;
     let max_iter: usize = 200;
 
-    let mut transform = Transform::identity();
+    let mut transform = Transform::<2>::identity();
     let mut prev_error = huber_error(&transform, src, dst);
 
     for _ in 0..max_iter {
@@ -102,7 +100,7 @@ pub fn estimate_transform_3d(src: &[Vector<3>], dst: &[Vector<3>]) -> (Transform
     let delta_norm_threshold: f32 = 1e-6;
     let max_iter: usize = 200;
 
-    let mut transform = Transform::identity();
+    let mut transform = Transform::<3>::identity();
     let mut prev_error = huber_error(&transform, src, dst);
 
     for _ in 0..max_iter {
@@ -185,16 +183,33 @@ impl Icp2d {
     }
 }
 
+const UP: Vector3 = Vector3::new(0.0, 0.0, 1.0);
+
+trait Upness {
+    fn upness(&self) -> f32;
+}
+
+impl Upness for Vector6 {
+    fn upness(&self) -> f32 {
+        let normal = Vector3::new(self[3], self[4], self[5]);
+        if normal.magnitude() < 1e-6 {
+            return 0.0;
+        }
+        let normal = normal.normalize();
+        normal.dot(&UP)
+    }
+}
+
 pub struct Icp3d {
-    pub kdtree: KdTree<f32, usize, [f32; 3]>,
-    pub dst: Vec<Vector3>,
+    pub kdtree: KdTree<f32, usize, [f32; 4]>,
+    pub dst: Vec<Vector6>,
 }
 
 impl Icp3d {
-    pub fn new(dst: Vec<Vector3>) -> Self {
-        let mut kdtree = KdTree::new(3);
+    pub fn new(dst: Vec<Vector6>) -> Self {
+        let mut kdtree = KdTree::new(4);
         for (i, p) in dst.iter().enumerate() {
-            kdtree.add([p.x, p.y, p.z], i).unwrap();
+            kdtree.add([p.x, p.y, p.z, p.upness()], i).unwrap();
         }
         Icp3d { kdtree, dst }
     }
@@ -203,7 +218,7 @@ impl Icp3d {
     /// This function assumes that the vehicle, LiDAR or other point cloud scanner is moving on the xy-plane.
     pub fn estimate(
         &self,
-        src: &[Vector<3>],
+        src: &[Vector<6>],
         initial_transform: &Transform<3>,
         max_iter: usize,
         debug: bool,
@@ -214,6 +229,7 @@ impl Icp3d {
         for _ in 0..max_iter {
             let src_tranformed = src.transformed(&transform);
             let nearest_dsts = self.get_nearest_dsts(&src_tranformed);
+            let src_tranformed = src_tranformed.iter().map(|s| s.xyz()).collect::<Vec<_>>();
             if debug {
                 let pairs = src_tranformed
                     .iter()
@@ -230,15 +246,15 @@ impl Icp3d {
         (transform, prev_error, debug_info)
     }
 
-    pub fn get_nearest_dsts(&self, src: &[Vector3]) -> Vec<Vector3> {
+    pub fn get_nearest_dsts(&self, src: &[Vector6]) -> Vec<Vector3> {
         src.iter()
             .map(|&p| {
                 let results = self
                     .kdtree
-                    .nearest(&[p.x, p.y, p.z], 1, &squared_euclidean)
+                    .nearest(&[p.x, p.y, p.z, p.upness()], 1, &squared_euclidean)
                     .unwrap();
                 let first = results.first().unwrap();
-                self.dst[*first.1]
+                self.dst[*first.1].xyz()
             })
             .collect()
     }
@@ -265,7 +281,7 @@ fn jacobian_3d(rot: &Rotation2, landmark: &Vector3) -> Jacobian3d {
     Jacobian3d::new(
         r[(0, 0)], r[(0, 1)], 0.0, b[0], // x-translation, rotation affects x and y
         r[(1, 0)], r[(1, 1)], 0.0, b[1], // y-translation, rotation affects x and y
-        0.0,             0.0, 1.0,  0.0  // z-translation, no effect from rotation
+              0.0,       0.0, 1.0,  0.0  // z-translation, no effect from rotation
     )
 }
 
